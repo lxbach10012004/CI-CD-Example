@@ -1,27 +1,24 @@
-# Spring Boot Đăng nhập - MVC với Docker Desktop và Kubernetes
+# Spring Boot Đăng nhập - MVC với Docker Desktop, Kubernetes, GitHub Actions và ArgoCD
 
-- Thêm xác thực với Auth0 bằng cách sử dụng [Okta Spring Boot Starter](https://github.com/okta/okta-spring-boot) vào ứng dụng Spring Boot MVC
-- Truy cập thông tin hồ sơ của người dùng đã xác thực
-- Chỉ cho phép người dùng đã xác thực truy cập vào một số tài nguyên nhất định
+- Thêm xác thực với Auth0 bằng [Okta Spring Boot Starter](https://github.com/okta/okta-spring-boot) vào ứng dụng Spring Boot MVC.
+- Triển khai tự động với GitHub Actions và ArgoCD.
 
 ## Yêu cầu
 
 - Java 17
 - Docker Desktop
-- Kubernetes (K8s) trên Docker Desktop
+- Kubernetes (K8s) đã được cài đặt
+- GitHub Actions để CI/CD
+- ArgoCD để triển khai tự động
 
-## Cấu hình
+## Cài đặt Auth0
 
-### Bảng điều khiển Auth0
+1. Truy cập [Auth0 Dashboard](https://manage.auth0.com/#/clients), tạo một ứng dụng mới với loại **Regular Web Application**.
+2. Trong tab **Settings**, thêm `http://localhost:3000/login/oauth2/code/okta` vào **Allowed Callback URLs**.
+3. Thêm `http://localhost:3000/` vào **Allowed Logout URLs**.
+4. Lưu thay đổi và lưu lại Client ID, Client Secret, Issuer URI.
 
-2. Trên [Bảng điều khiển Auth0](https://manage.auth0.com/#/clients), tạo một Ứng dụng mới với loại **Regular Web Application**.
-4. Trong tab **Settings** của ứng dụng, thêm URL `http://localhost:3000/login/oauth2/code/okta` vào trường **Allowed Callback URLs**.
-6. Trong tab **Settings** của ứng dụng, thêm URL `http://localhost:3000/` vào trường **Allowed Logout URLs**.
-8. Lưu các thay đổi trong cài đặt ứng dụng. Đừng đóng trang này; bạn sẽ cần một số thông tin để cấu hình ứng dụng ở bước tiếp theo.
-
-### Cấu hình ứng dụng
-
-Thiết lập các giá trị của ứng dụng trong tệp `src/main/resources/application.yml` với các giá trị từ ứng dụng Auth0 của bạn.
+Cấu hình trong `src/main/resources/application.yml`:
 
 ```yaml
 client-id: {YOUR-CLIENT-ID}
@@ -29,38 +26,66 @@ client-secret: {YOUR-CLIENT-SECRET}
 issuer-uri: https://{YOUR-DOMAIN}/
 ```
 
-## Chạy ứng dụng với Docker Desktop và Kubernetes
+---
 
-### 1. Xây dựng image Docker
+## 1. Triển khai với GitHub Actions
 
-Mở terminal, di chuyển đến thư mục gốc của dự án và chạy lệnh sau:
+### 1.1. Tạo workflow GitHub Actions
 
-```bash
-docker build -t docker-example .
+Trong repo GitHub, tạo tệp `.github/workflows/docker-ci.yml`:
+
+```yaml
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract Docker image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.DOCKER_USERNAME }}/my-image
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: true
+          sbom: true
 ```
 
-### 2. Đẩy image lên Docker Hub (tùy chọn)
+### 1.2. Kết quả GitHub Actions
 
-```bash
-docker tag docker-example your-dockerhub-username/docker-example
-docker push your-dockerhub-username/docker-example
-```
+![GitHub Actions](img/GithubActions.png)
 
-### 3. Chạy container Docker
+---
 
-```bash
-docker run -p 3000:3000 docker-example
-```
+## 2. Triển khai với Kubernetes
 
-Ứng dụng sẽ khả dụng tại địa chỉ [http://localhost:3000](http://localhost:3000/).
+### 2.1. Tạo Deployment và Service
 
-Kết quả
-
-![Docker Image](img/docker.png)
-
-### 4. Triển khai ứng dụng với Kubernetes
-
-Tạo tệp `deployment.yaml` với nội dung sau:
+Tạo `k8s/deployment.yaml`:
 
 ```yaml
 apiVersion: apps/v1
@@ -78,49 +103,111 @@ spec:
         app: docker-example
     spec:
       containers:
-      - name: docker-example
-        image: your-dockerhub-username/docker-example
-        ports:
-        - containerPort: 3000
+        - name: docker-example
+          image: lxbach10012004/docker-example:latest
+          ports:
+            - containerPort: 3000
 ```
 
-Tạo tệp `service.yaml` để cấu hình service:
+Tạo `k8s/service.yaml`:
 
 ```yaml
+
 apiVersion: v1
 kind: Service
 metadata:
   name: my-spring-boot-service
 spec:
-  type: NodePort
   selector:
     app: docker-example
   ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 3000
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: NodePort
 ```
 
-### 5. Áp dụng cấu hình Kubernetes
+### 2.2. Áp dụng Kubernetes
 
 ```bash
 kubectl apply -f deployment.yaml
 kubectl apply -f service.yaml
 ```
 
-### 6. Kiểm tra trạng thái Kubernetes
+Kiểm tra:
 
 ```bash
 kubectl get all
 ```
-Kết quả:
-
-![Kubernetes Deployment](img/k8s.png)
-
 
 Tìm cổng NodePort và truy cập ứng dụng tại `http://localhost:{NODE_PORT}`.
 
 ---
 
-Bài làm của: Lê Xuân Bách - MSV 22024506
+## 3. Triển khai tự động với ArgoCD
+
+### 3.1. Cài đặt ArgoCD
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+### 3.2. Lấy mật khẩu admin ArgoCD
+
+```bash
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
+```
+
+### 3.3. Truy cập giao diện ArgoCD
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
+
+Mở trình duyệt: [https://localhost:8080](https://localhost:8080), đăng nhập với user `admin` và mật khẩu đã lấy.
+
+### 3.4. Tạo Application trong ArgoCD
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: 'https://github.com/your-username/your-repo.git'
+    targetRevision: HEAD
+    path: k8s
+  project: default
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+```
+
+Triển khai application:
+
+```bash
+kubectl apply -f argocd-app.yaml
+```
+
+### 3.5. Kết quả ArgoCD
+
+![ArgoCD](img/ArgoCD.png)
+
+---
+
+## 4. Kiểm tra API bằng Postman
+Sau khi triển khai thành công, có thể dùng **Postman** để kiểm tra API:
+- **Gửi yêu cầu GET:** `http://localhost:{NODE_PORT}`
+
+### 4.1. Kết quả
+![Postman](img/postman.png)
+---
+Bài làm của: **Lê Xuân Bách** - MSV 22024506
 
