@@ -80,7 +80,7 @@ alertmanager:
       - name: "null"
       - name: demo-webhook
         webhook_configs:
-          - url: http://example.com/webhook
+          - url: "https://webhook.site/874717f6-7ad2-4a7b-990b-5c75ee70b1d5"
             send_resolved: true
       - name: email-notifications
         email_configs:
@@ -94,7 +94,25 @@ helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --reuse-values -f alertmanager-config.yaml -n kube-prometheus-stack
 ```
 
-### 4.3. Kết quả
+### 4.3. Gửi thử các lệnh Alert
+#### Gửi Alert đến Webhook
+```bash
+curl -H 'Content-Type: application/json' -d '[{"labels":{"alertname":"alert-demo","namespace":"demo","service":"demo"}}]' http://127.0.0.1:9093/api/v2/alerts
+```
+
+#### Gửi Alert đến Email
+```bash
+curl -H 'Content-Type: application/json' -d '[
+  {
+    "labels": {
+      "alertname": "TestEmailAlert",
+      "severity": "critical"
+    }
+  }
+]' http://127.0.0.1:9093/api/v2/alerts
+```
+
+### 4.4. Kết quả
 - **Alert gửi về webhook**
   ![Webhook Alert](img/webhook-alert.png)
 - **Alert gửi về email**
