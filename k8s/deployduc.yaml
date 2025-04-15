@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mvc-login-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mvc-login
+  template:
+    metadata:
+      labels:
+        app: mvc-login
+    spec:
+      containers:
+        - name: mvc-login
+          # Cập nhật image từ Docker Hub, thay 'your-dockerhub-username' bằng tài khoản của bạn
+          image: ducp96064/mvc-login:latest
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mvc-login-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: mvc-login
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000

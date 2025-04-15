@@ -143,7 +143,7 @@ kubectl apply -f service.yaml
 
 
 
-## 📸 Kiểm tra & minh chứng 
+## 📸 Kiểm tra
 
 
 ### 1. Kiểm tra tài nguyên Kubernetes 
@@ -184,6 +184,12 @@ http://<EXTERNAL-IP>
 
 ---
 
+### 3. Monitor trực tiếp trên Google Cloud Console
+![Giao diện monitoring của Google Cloud](img_cloud/monitor.png)
+
+### 4. Thử nghiệm tăng tải với JMeter
+- Thử với 5000 requests, hệ thống tự tăng thêm 1 cpu
+![Thử với 5000 requests, hệ thống tự tăng thêm 1 cpu](img_cloud/jmeter.png)
 
 
 ## 👤 Tác giả 
