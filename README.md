@@ -1,123 +1,191 @@
-# Monitoring Spring Boot trên Kubernetes với Prometheus, Grafana và Alertmanager
+# 🌐 Spring Boot Login - Triển khai thủ công trên Google Kubernetes Engine (GKE) 
 
-## 1. Giới thiệu
-Cách thiết lập hệ thống giám sát (monitoring) cho ứng dụng Spring Boot chạy trên Kubernetes bằng Prometheus, Grafana và Alertmanager.
+Ứng dụng Spring Boot tích hợp xác thực OAuth2, được đóng gói bằng Docker và triển khai thủ công lên GKE bằng `kubectl`.
 
-## 2. Cài đặt kube-prometheus-stack
-
-### 2.1. Thêm Helm repo và cập nhật
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-```
-
-### 2.2. Cài đặt kube-prometheus-stack
-```bash
-helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n kube-prometheus-stack --create-namespace
-```
-
-## 3. Truy cập các dịch vụ monitoring
-
-### 3.1. Prometheus (Port 9090)
-```bash
-kubectl port-forward svc/kube-prometheus-stack-prometheus -n kube-prometheus-stack 9090:9090
-```
-Mở trình duyệt và truy cập: [http://localhost:9090](http://localhost:9090)
-
-**Kết quả:**
-![Prometheus](img/prometheus.png)
-
-### 3.2. Grafana (Port 8080)
-```bash
-kubectl port-forward svc/kube-prometheus-stack-grafana -n kube-prometheus-stack 8080:80
-```
-Đăng nhập Grafana với:
-- Username: `admin`
-- Password: Lấy bằng lệnh:
-```bash
-kubectl get secret --namespace kube-prometheus-stack kube-prometheus-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
-```
-
-Mở trình duyệt và truy cập: [http://localhost:8080](http://localhost:8080)
-
-**Kết quả:**
-![Grafana](img/grafana.png)
-
-### 3.3. Alertmanager (Port 9093)
-```bash
-kubectl port-forward svc/kube-prometheus-stack-alertmanager -n kube-prometheus-stack 9093:9093
-```
-Mở trình duyệt và truy cập: [http://localhost:9093](http://localhost:9093)
-
-**Kết quả:**
-![Alertmanager](img/alertmanager.png)
-
-## 4. Cấu hình Alertmanager để gửi cảnh báo qua Webhook và Email
-
-### 4.1. Sửa file cấu hình `alertmanager-config.yaml`
-```yaml
-alertmanager:
-  config:
-    global:
-      resolve_timeout: 5m
-      smtp_smarthost: 'smtp.gmail.com:587'  # Replace with your SMTP server
-      smtp_from: 'bachlx2004@gmail.com'  # Sender email
-      smtp_auth_username: 'bachlx2004@gmail.com'
-      smtp_auth_password: '###'  # Use an app password if needed
-      smtp_require_tls: true  # Ensure TLS security
-
-    route:
-      receiver: demo-webhook
-      group_wait: 5s
-      group_interval: 10s
-      repeat_interval: 1h
-      routes:
-        - receiver: email-notifications
-          match:
-            severity: critical  # Only send critical alerts to email
-
-    receivers:
-      - name: "null"
-      - name: demo-webhook
-        webhook_configs:
-          - url: "https://webhook.site/874717f6-7ad2-4a7b-990b-5c75ee70b1d5"
-            send_resolved: true
-      - name: email-notifications
-        email_configs:
-          - to: 'bachlx2004@gmail.com'  # Replace with the actual recipient
-            send_resolved: true
-```
-
-### 4.2. Áp dụng cấu hình với Helm
-```bash
-helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --reuse-values -f alertmanager-config.yaml -n kube-prometheus-stack
-```
-
-### 4.3. Gửi thử các lệnh Alert
-#### Gửi Alert đến Webhook
-```bash
-curl -H 'Content-Type: application/json' -d '[{"labels":{"alertname":"alert-demo","namespace":"demo","service":"demo"}}]' http://127.0.0.1:9093/api/v2/alerts
-```
-
-#### Gửi Alert đến Email
-```bash
-curl -H 'Content-Type: application/json' -d '[
-  {
-    "labels": {
-      "alertname": "TestEmailAlert",
-      "severity": "critical"
-    }
-  }
-]' http://127.0.0.1:9093/api/v2/alerts
-```
-
-### 4.4. Kết quả
-- **Alert gửi về webhook**
-  ![Webhook Alert](img/webhook-alert.png)
-- **Alert gửi về email**
-  ![Email Alert](img/email-alert.png)
 
 ---
-Bài làm của: **Lê Xuân Bách** - MSV 22024506
 
+
+
+## ✅ Tính năng chính 
+
+ 
+- Xác thực OAuth2 với Auth0
+ 
+- Container hóa bằng Docker
+ 
+- Triển khai thủ công lên Google Kubernetes Engine
+ 
+- Cấu hình LoadBalancer để truy cập công khai
+
+
+
+---
+
+
+
+## 🧰 Yêu cầu 
+
+ 
+- Java 17
+ 
+- Docker
+ 
+- Tài khoản Google Cloud (GCP)
+ 
+- Đã cài đặt:
+
+ 
+  - [gcloud]()
+ 
+  - [kubectl]()
+
+---
+
+## 🐳 Docker Build và Push 
+
+
+
+```bash
+docker build -t lxbach10012004/docker-example .
+docker push lxbach10012004/docker-example:latest
+```
+
+
+
+---
+
+
+
+## ☁️ Tạo Cluster GKE 
+
+ 
+2. Vào **Kubernetes Engine**  trong GCP Console → Tạo cluster
+ 
+4. Kết nối cluster:
+
+
+
+```bash
+gcloud container clusters get-credentials <cluster-name> --zone <zone> --project <project-id>
+```
+
+
+
+---
+
+
+
+## 🚀 Triển khai ứng dụng 
+
+
+### 1. Tạo Deployment 
+
+`deployment.yaml`** 
+
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docker-example
+  template:
+    metadata:
+      labels:
+        app: docker-example
+    spec:
+      containers:
+        - name: docker-example
+          image: lxbach10012004/docker-example:latest
+          ports:
+            - containerPort: 3000
+```
+
+
+### 2. Tạo Service 
+
+`service.yaml`** 
+
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-spring-boot-service
+spec:
+  selector:
+    app: docker-example
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer
+```
+
+
+### 3. Deploy 
+
+
+
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+```
+
+
+
+---
+
+
+
+## 📸 Kiểm tra & minh chứng 
+
+
+### 1. Kiểm tra tài nguyên Kubernetes 
+
+
+
+```bash
+kubectl get all
+```
+
+![Kiểm tra tài nguyên K8s](img_cloud/getall.png)
+
+
+
+
+
+---
+
+
+
+### 2. Truy cập ứng dụng qua External IP 
+
+
+
+```bash
+kubectl get service my-spring-boot-service
+```
+
+Sau khi có địa chỉ `EXTERNAL-IP`, mở trình duyệt và truy cập:
+
+
+```cpp
+http://<EXTERNAL-IP>
+```
+
+![Giao diện ứng dụng hoạt động](img_cloud/webui.png)
+
+
+---
+
+
+
+## 👤 Tác giả 
+
+**Lê Xuân Bách**  – MSV 22024506
